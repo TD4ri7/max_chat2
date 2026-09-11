@@ -1,0 +1,13 @@
+services:
+  # ---------- Один сервис: Express отдаёт и статику, и Socket.io ----------
+  - type: web
+    name: cloud-chat
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: REDIS_URL
+        sync: false               # впишите вручную в панели Render
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false               # впишите вручную в панели Render (весь JSON одной строкой)

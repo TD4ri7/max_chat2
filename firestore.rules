@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // Читать профиль может любой залогиненный пользователь
+      allow read: if request.auth != null;
+      // Писать может только сервер через Firebase Admin SDK (он не подчиняется этим правилам)
+      allow write: if false;
+    }
+  }
+}
