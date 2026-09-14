@@ -11,7 +11,7 @@ const admin = require('firebase-admin');
 // ---------- Firebase Admin ----------
 // Используется для: проверки входа (Auth), профилей пользователей (Firestore
 // "users"), и метаданных групп/личных чатов (Firestore "groups"/"dms").
-// Сами сообщения (текст + медиа) в Firestore НЕ пишутся — только в Redis.
+// Сами сообщения (текст + медиа) в Firestore НЕ пишутся — только в Reis.
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
   ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
   : require('./serviceAccountKey.json');
