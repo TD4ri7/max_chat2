@@ -50,7 +50,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
 
 // ---------- Redis: сообщения (хранение) + pub/sub между инстансами ----------
-const MESSAGES_KEY = 'chat:messages';
+const MESSAGES_KEY = 'chat:general';
 const MAX_MESSAGES = 200;
 
 const redisUrl = process.env.REDIS_URL;
