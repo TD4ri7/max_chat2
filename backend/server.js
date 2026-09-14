@@ -9,9 +9,9 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const admin = require('firebase-admin');
 
 // ---------- Firebase Admin ----------
-// Используется для: проверки входа (Auth), профилей пользователей (Firestore
+// Используется для: проверки входа (Auth), профилей пользователей (Firestore 
 // "users"), и метаданных групп/личных чатов (Firestore "groups"/"dms").
-// Сами сообщения (текст + медиа) в Firestore НЕ пишутся — только в Reis.
+// Сами сообщения (текст + медиа) в Firestore НЕ пишутся — только в Redis.
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
   ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
   : require('./serviceAccountKey.json');
@@ -30,6 +30,16 @@ const GENERAL_ROOM = 'general';
 const MAX_MESSAGES = 200; // сколько последних сообщений хранить на комнату
 const MAX_MEDIA_BYTES = 8 * 1024 * 1024; // ~8 МБ на файл (фото/гифка/видео), оценка по base64
 const MAX_AVATAR_CHARS = 1_500_000; // ограничение на длину base64-аватарки в Firestore-документе
+
+// Чтобы неожиданная ошибка где-то в асинхронном коде не роняла весь процесс
+// молча — Render в таком случае просто перезапускает сервис без объяснений,
+// а в логах теперь будет видно, что именно произошло.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
 
 // ---------- Express ----------
 const app = express();
@@ -346,21 +356,14 @@ io.use(async (socket, next) => {
   }
 });
 
-io.on('connection', async (socket) => {
+io.on('connection', (socket) => {
   console.log(`Подключился: ${socket.user.uid}`);
 
-  const profile = await ensureUserProfile(socket.user);
-  socket.user.name = profile.name;
-  socket.user.avatar = profile.avatar || '';
-
+  // Общий чат и обработчики регистрируем СРАЗУ, синхронно, до любых await —
+  // если ниже что-то упадёт при обращении к Firestore, сокет всё равно
+  // остаётся рабочим и слышит события (иначе сообщения улетали бы в никуда).
   trackSocket(socket.user.uid, socket);
   socket.join(GENERAL_ROOM);
-
-  const [groups, dms] = await Promise.all([getUserGroups(socket.user.uid), getUserDms(socket.user.uid)]);
-  groups.forEach((g) => socket.join(`group:${g.id}`));
-  dms.forEach((d) => socket.join(`dm:${d.id}`));
-
-  socket.broadcast.emit('presence', { uid: socket.user.uid, status: 'online' });
 
   socket.on('message', async (payload) => {
     const roomId = String(payload?.roomId || GENERAL_ROOM);
@@ -433,6 +436,27 @@ io.on('connection', async (socket) => {
     untrackSocket(socket.user.uid, socket);
     socket.broadcast.emit('presence', { uid: socket.user.uid, status: 'offline' });
   });
+
+  // Асинхронная часть — подгрузка профиля (имя/аватар) и подключение к
+  // комнатам групп/ЛС. Обёрнута в try/catch: если Firestore недоступен или
+  // упадёт с ошибкой, общий чат (уже подключён выше) продолжает работать,
+  // просто имя/аватар останутся дефолтными, а группы/ЛС не подключатся.
+  (async () => {
+    try {
+      const profile = await ensureUserProfile(socket.user);
+      socket.user.name = profile.name;
+      socket.user.avatar = profile.avatar || '';
+
+      const [groups, dms] = await Promise.all([getUserGroups(socket.user.uid), getUserDms(socket.user.uid)]);
+      groups.forEach((g) => socket.join(`group:${g.id}`));
+      dms.forEach((d) => socket.join(`dm:${d.id}`));
+
+      socket.broadcast.emit('presence', { uid: socket.user.uid, status: 'online' });
+    } catch (err) {
+      console.error('Ошибка инициализации сокета (профиль/комнаты):', err);
+      socket.emit('chat-error', { message: 'Не удалось загрузить профиль или список чатов. Попробуйте перезайти.' });
+    }
+  })();
 });
 
 // Любой прочий GET-запрос (например, обновление страницы) — отдаём index.html
