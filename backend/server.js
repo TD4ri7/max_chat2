@@ -60,7 +60,7 @@ const io = new Server(server, {
 });
 
 // ---------- Redis: сообщения (хранение, по комнатам) + pub/sub между инстансами ----------
-const messagesKey = (roomId) => `chat:messages:${roomId}`;
+const messagesKey = (roomId) => `chat:general:${roomId}`;
 
 const redisUrl = process.env.REDIS_URL;
 if (!redisUrl) {
