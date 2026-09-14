@@ -7,5 +7,15 @@ service cloud.firestore {
       // Писать может только сервер через Firebase Admin SDK (он не подчиняется этим правилам)
       allow write: if false;
     }
+
+    // Группы и личные чаты (метаданные, не сами сообщения) — клиент к ним
+    // напрямую не обращается, всё идёт через backend (Firebase Admin SDK
+    // не подчиняется этим правилам), поэтому доступ с клиента полностью закрыт.
+    match /groups/{groupId} {
+      allow read, write: if false;
+    }
+    match /dms/{dmId} {
+      allow read, write: if false;
+    }
   }
 }
